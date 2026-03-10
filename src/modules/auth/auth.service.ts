@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -9,6 +10,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
@@ -78,7 +80,7 @@ export class AuthService {
       this.jwtService.signAsync({ ...payload, refreshId }, { expiresIn: '7d' }),
     ]);
 
-    return [(accessToken, refreshToken)];
+    return { accessToken, refreshToken };
   }
 
   //UPDATE REFRESH TOKEN
@@ -90,5 +92,66 @@ export class AuthService {
       where: { id: userId },
       data: { refreshToken },
     });
+  }
+
+  //REFRESH ACCCES TOKEN
+  async refreshTokens(userId: string): Promise<AuthResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    return {
+      ...tokens,
+      user,
+    };
+  }
+
+  //LOGOUT
+  async logout(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshToken: null },
+    });
+  }
+
+  //LOGIN
+  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+    const { email, password } = loginDto;
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
+    };
   }
 }
