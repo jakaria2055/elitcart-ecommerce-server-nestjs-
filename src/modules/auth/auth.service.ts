@@ -33,12 +33,10 @@ export class AuthService {
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const hashedPassword = await bcrypt.hash(password, this.SALT_ROUNDS);
       const user = await this.prisma.user.create({
         data: {
           email,
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           password: hashedPassword,
           firstName,
           lastName,
