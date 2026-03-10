@@ -1,8 +1,9 @@
 import { Reflector } from '@nestjs/core';
-import { CanActivate, ExecutionContext } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorators';
 
+@Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 

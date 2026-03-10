@@ -89,7 +89,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Email already in use' })
   async updateProfile(
-    userId: string,
+    @GetUser('id') userId: string,
     @Body() updateUserDto: UpdateUserDto,
   ): Promise<UserResponseDto> {
     return await this.userService.update(userId, updateUserDto);
@@ -117,5 +117,19 @@ export class UsersController {
     @GetUser('id') userId: string,
   ): Promise<{ message: string }> {
     return await this.userService.remove(userId);
+  }
+
+  //API7: DELETE USER BY ID(FOR ADMIN PURPOSE)
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete User by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'User with the specified ID deleted successfully.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async deleteUser(@Param('id') id: string): Promise<{ message: string }> {
+    return await this.userService.remove(id);
   }
 }
