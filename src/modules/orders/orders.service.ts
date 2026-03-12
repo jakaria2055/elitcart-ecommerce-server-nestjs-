@@ -11,6 +11,7 @@ import {
 } from './dto/order-response.dto';
 import { Order, OrderItem, OrderStatus, Product, User } from '@prisma/client';
 import { QueryOrderDto } from './dto/query-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
 
 @Injectable()
 export class OrdersService {
@@ -137,6 +138,111 @@ export class OrdersService {
       page,
       limit,
     };
+  }
+
+  //GET ORDER OF CURRENT USER
+  async findAll(
+    userId: string,
+    query: QueryOrderDto,
+  ): Promise<{
+    data: OrderResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const { page = 1, limit = 10, status, search } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = { userId };
+
+    if (status) where.status = status;
+    if (search) where.OR = [{ id: { contains: search, mode: 'insensitive' } }];
+
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          user: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      data: orders.map((o) => this.map(o)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  //GET ORDER BY ID(ADMIN)
+  async findOne(
+    id: string,
+    userId?: string,
+  ): Promise<OrderApiResponseDto<OrderResponseDto>> {
+    const where: any = { id };
+
+    if (userId) where.userId = userId;
+
+    const order = await this.prisma.order.findFirst({
+      where,
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+        user: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${id} not found.`);
+    }
+
+    return this.wrap(order);
+  }
+
+  //UPDATE ORDER STATUS BY ADMIN
+  async update(
+    id: string,
+    updateOrderDto: UpdateOrderDto,
+    userId?: string,
+  ): Promise<OrderApiResponseDto<OrderResponseDto>> {
+    const where: any = { id };
+    if (userId) where.userId = userId;
+
+    const existing = await this.prisma.order.findFirst({
+      where,
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`order ${id} not found.`);
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: updateOrderDto,
+      include: {
+        orderItems: {
+          include: {
+            product: true,
+          },
+        },
+        user: true,
+      },
+    });
+
+    return this.wrap(updated);
   }
 
   private wrap(

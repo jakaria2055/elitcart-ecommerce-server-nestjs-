@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -6,8 +15,9 @@ import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
-  ApiProperty,
+  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -25,11 +35,13 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import {
   OrderApiResponseDto,
   OrderResponseDto,
+  PaginatedOrderResponseDto,
 } from './dto/order-response.dto';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { Roles } from 'src/common/decorators/roles.decorators';
 import { Role } from '@prisma/client';
 import { QueryOrderDto } from './dto/query-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
 
 @ApiTags('orders')
 @ApiBearerAuth('JWT-auth')
@@ -105,5 +117,93 @@ export class OrdersController {
   })
   async findAllForAdmin(@Query() query: QueryOrderDto) {
     return await this.ordersService.findAllForAdmin(query);
+  }
+
+  //GET ORDER FROM USER SIDE
+  @Get()
+  @RelaxedThrottle()
+  @ApiOperation({
+    summary: 'Get all order of current user(paginated)',
+  })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({
+    description: 'List of user orders:',
+    type: PaginatedOrderResponseDto,
+  })
+  async findAll(@Query() query: QueryOrderDto, @GetUser('id') userId: string) {
+    return await this.ordersService.findAll(userId, query);
+  }
+
+  //GET ORDER BY IS (ADMIN)
+  @Get('admin/:id')
+  @Roles(Role.ADMIN)
+  @RelaxedThrottle()
+  @ApiOperation({
+    summary: '[ADMIN] Get order by ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Order ID',
+  })
+  @ApiOkResponse({
+    description: 'Order Details',
+    type: OrderApiResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Order not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'Admin access required.',
+  })
+  async findOneAdmin(@Param('id') id: string) {
+    return await this.ordersService.findOne(id);
+  }
+
+  //GET ORDER BY ID (USER)
+  @Get(':id')
+  @RelaxedThrottle()
+  @ApiOperation({
+    summary: 'Get an order by ID for current user',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Order ID',
+  })
+  @ApiOkResponse({ description: 'Order details', type: OrderApiResponseDto })
+  @ApiNotFoundResponse({
+    description: 'Order Not Found',
+  })
+  async findOne(@Param('id') id: string, @GetUser('id') userId: string) {
+    return await this.ordersService.findOne(id, userId);
+  }
+
+  //ORDER STATUS UPDATE BY ADMIN
+  @Patch('admin/:id')
+  @Roles(Role.ADMIN)
+  @ModerateThrottle()
+  @ApiOperation({
+    summary: '[ADMIN] update order status',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Order ID',
+  })
+  @ApiBody({
+    type: UpdateOrderDto,
+  })
+  @ApiOkResponse({
+    description: 'Order Update Successfully',
+    type: OrderApiResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Order Not Found',
+  })
+  @ApiForbiddenResponse({
+    description: 'Admin access required',
+  })
+  async updateAdmin(@Param('id') id: string, @Body() dto: UpdateOrderDto) {
+    return await this.ordersService.update(id, dto);
   }
 }
