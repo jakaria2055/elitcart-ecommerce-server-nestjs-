@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -205,5 +206,58 @@ export class OrdersController {
   })
   async updateAdmin(@Param('id') id: string, @Body() dto: UpdateOrderDto) {
     return await this.ordersService.update(id, dto);
+  }
+
+  //ORDER UPDATE BY USER
+  @Patch(':id')
+  @ModerateThrottle()
+  @ApiOperation({ summary: 'Update Your Own Order' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({ type: UpdateOrderDto })
+  @ApiOkResponse({
+    description: 'Order updated successfully.',
+  })
+  @ApiNotFoundResponse({
+    description: 'Order does not exists',
+  })
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrderDto,
+    @GetUser('id') userId: string,
+  ) {
+    return await this.ordersService.update(id, dto, userId);
+  }
+
+  //ADMIN DELETE AN ORDER
+  @Delete('admin/:id')
+  @Roles(Role.ADMIN)
+  @ModerateThrottle()
+  @ApiOperation({ summary: 'Admin cancel order by ID' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiOkResponse({
+    description: 'Order Cancelled Sussceefully.',
+    type: OrderApiResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Order Not Found',
+  })
+  async cancelAdmin(@Param('id') id: string) {
+    return await this.ordersService.cancel(id);
+  }
+
+  //USER DELETE ORDER
+  @Delete(':id')
+  @ModerateThrottle()
+  @ApiOperation({ summary: 'User cancel order by ID' })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiOkResponse({
+    description: 'Order Cancelled Successfully.',
+    type: OrderApiResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Order Not Found',
+  })
+  async cancel(@Param('id') id: string, @GetUser('id') userId: string) {
+    return await this.ordersService.cancel(id, userId);
   }
 }

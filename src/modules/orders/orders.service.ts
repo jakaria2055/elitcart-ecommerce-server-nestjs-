@@ -17,13 +17,22 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 export class OrdersService {
   constructor(private prisma: PrismaService) {}
 
-  //CREATE ORDER
+  //CREATE ORDER Service
   async create(
     userId: string,
     createOrderDto: CreateOrderDto,
   ): Promise<OrderApiResponseDto<OrderResponseDto>> {
     const { items, shippingAddress } = createOrderDto;
 
+    let total = 0;
+
+    const orderItems: {
+      productId: string;
+      quantity: number;
+      price: number;
+    }[] = [];
+
+    // Validate products and calculate total
     for (const item of items) {
       const product = await this.prisma.product.findUnique({
         where: { id: item.productId },
@@ -40,12 +49,17 @@ export class OrdersService {
           `Insufficient stock of product ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`,
         );
       }
-    }
 
-    const total = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0,
-    );
+      const price = Number(product.price);
+
+      total += price * item.quantity;
+
+      orderItems.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: price, // price from DB (not from client)
+      });
+    }
 
     const latestCart = await this.prisma.cart.findFirst({
       where: {
@@ -66,11 +80,7 @@ export class OrdersService {
           shippingAddress,
           cartId: latestCart?.id,
           orderItems: {
-            create: items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              price: item.price,
-            })),
+            create: orderItems,
           },
         },
         include: {
@@ -83,10 +93,13 @@ export class OrdersService {
         },
       });
 
+      // Reduce stock
       for (const item of items) {
         await tx.product.update({
           where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
+          data: {
+            stock: { decrement: item.quantity },
+          },
         });
       }
 
@@ -212,7 +225,7 @@ export class OrdersService {
     return this.wrap(order);
   }
 
-  //UPDATE ORDER STATUS BY ADMIN
+  //UPDATE ORDER STATUS BY ADMIN OR USER
   async update(
     id: string,
     updateOrderDto: UpdateOrderDto,
@@ -243,6 +256,54 @@ export class OrdersService {
     });
 
     return this.wrap(updated);
+  }
+
+  //CANCEL AN ORDER
+  async cancel(
+    id: string,
+    userId?: string,
+  ): Promise<OrderApiResponseDto<OrderResponseDto>> {
+    const where: any = { id };
+    if (userId) where.userId = userId;
+    const order = await this.prisma.order.findFirst({
+      where,
+      include: {
+        orderItems: true,
+        user: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${id} with this ID not found.`);
+    }
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Only pending orders can be cancelled.');
+    }
+
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      for (const item of order.orderItems) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: { status: OrderStatus.CANCELLED },
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
+          },
+          user: true,
+        },
+      });
+    });
+
+    return this.wrap(cancelled);
   }
 
   private wrap(
