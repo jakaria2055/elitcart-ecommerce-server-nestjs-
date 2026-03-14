@@ -20,7 +20,6 @@ export class PaymentsService {
     });
   }
 
-
   //CREATE PAYMENT INTENT
   async createPaymentIntent(
     userId: string,
@@ -30,7 +29,7 @@ export class PaymentsService {
     data: { clientSecret: string; paymentId: string };
     message: string;
   }> {
-    const { orderId, amount, currency = 'usd' } = createPaymentIntentDto;
+    const { orderId, currency = 'usd' } = createPaymentIntentDto;
 
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, userId },
@@ -39,6 +38,8 @@ export class PaymentsService {
     if (!order) {
       throw new NotFoundException(`Order with this ${orderId} ID not found.`);
     }
+
+    const amount = Number(order.totalAmount);
 
     const existingPayment = await this.prisma.payment.findFirst({
       where: { orderId },
@@ -135,6 +136,63 @@ export class PaymentsService {
       success: true,
       data: this.mapToPaymentResponse(updatePayment),
       message: 'Payment confirmed successfully',
+    };
+  }
+
+  //GET ALL PAYMENT FOR CURRENT USER
+  async findAll(userId: string): Promise<{
+    success: boolean;
+    data: PaymentResponseDto[];
+    message: string;
+  }> {
+    const payments = await this.prisma.payment.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return {
+      success: true,
+      data: payments.map((payment) => this.mapToPaymentResponse(payment)),
+      message: 'Payment Retrieved successfully.',
+    };
+  }
+
+  //GET PAYMENT BY ID
+  async findOne(
+    id: string,
+    userId: string,
+  ): Promise<{ success: boolean; data: PaymentResponseDto; message: string }> {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id, userId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Payment with ${id} not found.`);
+    }
+
+    return {
+      success: true,
+      data: this.mapToPaymentResponse(payment),
+      message: 'Payment Retrieved Successfully.',
+    };
+  }
+
+  //GET PAYMENT BY ORDER ID
+  async findByOrder(
+    orderId: string,
+    userId: string,
+  ): Promise<{
+    success: boolean;
+    data: PaymentResponseDto | null;
+    message: string;
+  }> {
+    const payment = await this.prisma.payment.findFirst({
+      where: { orderId, userId },
+    });
+
+    return {
+      success: true,
+      data: payment ? this.mapToPaymentResponse(payment) : null,
+      message: 'Payment Retrieved Successfully.',
     };
   }
 

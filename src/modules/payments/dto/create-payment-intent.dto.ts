@@ -1,13 +1,9 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreatePaymentIntentDto {
   @IsNotEmpty()
   @IsString()
   orderId: string;
-
-  @IsNotEmpty()
-  @IsNumber()
-  amount: number;
 
   @IsOptional()
   @IsString()
@@ -15,5 +11,5 @@ export class CreatePaymentIntentDto {
 
   @IsOptional()
   @IsString()
-  description: string;
+  description?: string;
 }
